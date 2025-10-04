@@ -85,15 +85,33 @@ FROM dim_tiempo dt JOIN hechos_ventas hv ON dt.id_tiempo = hv.id_tiempo;
 -- =====================================================
 -- PARTE 3: RESUMEN GENERAL (Ejecutar al final)
 -- =====================================================
--- Genera un reporte simple de calidad overall
+-- CTE calcula % por campo directamente; outer query promedia y clasifica.
+
+USE jardineria_staging;
+GO
+
+WITH Porcentajes_Campos AS (
+    -- % no-NULL para 'nombre' (AL 100% post-extracción)
+    SELECT 
+        'nombre' AS Campo,
+        ROUND((COUNT(nombre) * 100.0 / COUNT(*)), 2) AS Pct_NoNull
+    FROM staging_producto
+    UNION ALL
+    -- % no-NULL para 'proveedor' (100% post-UPDATE en CREATE VIEW AND UPDATE.sql)
+    SELECT 
+        'proveedor' AS Campo,
+        ROUND((COUNT(proveedor) * 100.0 / COUNT(*)), 2) AS Pct_NoNull
+    FROM staging_producto
+   
+)
 SELECT 
     'Calidad_General' AS Metrica,
+    AVG(Pct_NoNull) AS Promedio_Porcentaje_NoNull,
     CASE 
-        WHEN AVG(Pct_NoNull) > 95 THEN 'Alta'
-        WHEN AVG(Pct_NoNull) > 90 THEN 'Media'
+        WHEN AVG(Pct_NoNull) >= 95 THEN 'Alta'
+        WHEN AVG(Pct_NoNull) >= 80 THEN 'Media'
         ELSE 'Baja'
-    END AS Nivel_Calidad
-FROM (
-    SELECT AVG(Pct_NoNull_Nombre) AS Pct_NoNull FROM staging_producto  -- Placeholder; expandir con más
-) AS Summary;
--- Esto se puede automatizar en un stored procedure para runs periódicos.
+    END AS Nivel_Calidad,
+    COUNT(*) AS Campos_Evaluados  -- Cuántos campos se chequean
+FROM Porcentajes_Campos;
+GO
